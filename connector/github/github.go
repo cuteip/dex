@@ -50,6 +50,13 @@ type Config struct {
 	LoadAllGroups        bool   `json:"loadAllGroups"`
 	UseLoginAsID         bool   `json:"useLoginAsID"`
 	PreferredEmailDomain string `json:"preferredEmailDomain"`
+	// NoreplyPrivateEmail configures the connector to use
+	// {id}+{login}@users.noreply.github.com as the user email if user has
+	// marked their email as private on GitHub.
+	// See https://docs.github.com/en/enterprise-cloud@latest/account-and-profile/setting-up-and-managing-your-personal-account-on-github/managing-email-preferences/setting-your-commit-email-address#setting-your-commit-email-address-on-github.
+	// Note, this is only valid for public and Enterprise Cloud GitHub (i.e. this only works on github.com domains).
+	// There is no equivalent for Enterprise Server GitHub / custom hosts.
+	NoreplyPrivateEmail bool `json:"noreplyPrivateEmail"`
 }
 
 // Org holds org-team filters, in which teams are optional.
@@ -159,6 +166,12 @@ type githubConnector struct {
 	useLoginAsID bool
 	// the domain to be preferred among the user's emails. e.g. "github.com"
 	preferredEmailDomain string
+	// use {id}+{login}@users.noreply.github.com as the user email if user has
+	// marked their email as private on GitHub.
+	// See https://docs.github.com/en/enterprise-cloud@latest/account-and-profile/setting-up-and-managing-your-personal-account-on-github/managing-email-preferences/setting-your-commit-email-address#setting-your-commit-email-address-on-github.
+	// Note, this is only valid for public and Enterprise Cloud GitHub (i.e. this only works on github.com domains).
+	// There is no equivalent for Enterprise Server GitHub / custom hosts.
+	noreplyPrivateEmail bool
 }
 
 // groupsRequired returns whether dex requires GitHub's 'read:org' scope. Dex
@@ -534,9 +547,16 @@ func (c *githubConnector) user(ctx context.Context, client *http.Client) (user, 
 	// Only public user emails are returned by 'GET /user'. u.Email will be empty
 	// if a users' email is private. We must retrieve private emails explicitly.
 	if u.Email == "" {
-		var err error
-		if u.Email, err = c.userEmail(ctx, client); err != nil {
-			return u, err
+		// If on github.com, GitHub allows for a special noreply email to
+		// associate users to commits without exposing their private email.
+		// See https://docs.github.com/en/enterprise-cloud@latest/account-and-profile/setting-up-and-managing-your-personal-account-on-github/managing-email-preferences/setting-your-commit-email-address#about-commit-email-addresses
+		if c.noreplyPrivateEmail && (c.hostName == "" || c.hostName == "github.com") {
+			u.Email = fmt.Sprintf("%d+%s@users.noreply.github.com", u.ID, u.Login)
+		} else {
+			var err error
+			if u.Email, err = c.userEmail(ctx, client); err != nil {
+				return u, err
+			}
 		}
 	}
 	return u, nil
