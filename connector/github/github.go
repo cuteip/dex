@@ -92,6 +92,7 @@ func (c *Config) Open(id string, logger log.Logger) (connector.Connector, error)
 		logger:               logger,
 		useLoginAsID:         c.UseLoginAsID,
 		preferredEmailDomain: c.PreferredEmailDomain,
+		noreplyPrivateEmail:  c.NoreplyPrivateEmail,
 	}
 
 	if c.HostName != "" {
