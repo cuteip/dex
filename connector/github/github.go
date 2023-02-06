@@ -540,6 +540,11 @@ type user struct {
 func (c *githubConnector) user(ctx context.Context, client *http.Client) (user, error) {
 	var u user
 
+	// https://developer.github.com/v3/users/#get-the-authenticated-user
+	if _, err := get(ctx, client, c.apiURL+"/user", &u); err != nil {
+		return u, err
+	}
+
 	// メールアドレスの公開状態によらず、noreply のメールアドレスを利用する
 	// If on github.com, GitHub allows for a special noreply email to
 	// associate users to commits without exposing their private email.
@@ -547,11 +552,6 @@ func (c *githubConnector) user(ctx context.Context, client *http.Client) (user, 
 	if c.noreplyPrivateEmail && (c.hostName == "" || c.hostName == "github.com") {
 		u.Email = fmt.Sprintf("%d+%s@users.noreply.github.com", u.ID, u.Login)
 		return u, nil
-	}
-
-	// https://developer.github.com/v3/users/#get-the-authenticated-user
-	if _, err := get(ctx, client, c.apiURL+"/user", &u); err != nil {
-		return u, err
 	}
 
 	// Only public user emails are returned by 'GET /user'. u.Email will be empty
