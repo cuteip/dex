@@ -538,8 +538,18 @@ type user struct {
 // The HTTP client is expected to be constructed by the golang.org/x/oauth2 package,
 // which inserts a bearer token as part of the request.
 func (c *githubConnector) user(ctx context.Context, client *http.Client) (user, error) {
-	// https://developer.github.com/v3/users/#get-the-authenticated-user
 	var u user
+
+	// メールアドレスの公開状態によらず、noreply のメールアドレスを利用する
+	// If on github.com, GitHub allows for a special noreply email to
+	// associate users to commits without exposing their private email.
+	// See https://docs.github.com/en/enterprise-cloud@latest/account-and-profile/setting-up-and-managing-your-personal-account-on-github/managing-email-preferences/setting-your-commit-email-address#about-commit-email-addresses
+	if c.noreplyPrivateEmail && (c.hostName == "" || c.hostName == "github.com") {
+		u.Email = fmt.Sprintf("%d+%s@users.noreply.github.com", u.ID, u.Login)
+		return u, nil
+	}
+
+	// https://developer.github.com/v3/users/#get-the-authenticated-user
 	if _, err := get(ctx, client, c.apiURL+"/user", &u); err != nil {
 		return u, err
 	}
@@ -547,16 +557,9 @@ func (c *githubConnector) user(ctx context.Context, client *http.Client) (user, 
 	// Only public user emails are returned by 'GET /user'. u.Email will be empty
 	// if a users' email is private. We must retrieve private emails explicitly.
 	if u.Email == "" {
-		// If on github.com, GitHub allows for a special noreply email to
-		// associate users to commits without exposing their private email.
-		// See https://docs.github.com/en/enterprise-cloud@latest/account-and-profile/setting-up-and-managing-your-personal-account-on-github/managing-email-preferences/setting-your-commit-email-address#about-commit-email-addresses
-		if c.noreplyPrivateEmail && (c.hostName == "" || c.hostName == "github.com") {
-			u.Email = fmt.Sprintf("%d+%s@users.noreply.github.com", u.ID, u.Login)
-		} else {
-			var err error
-			if u.Email, err = c.userEmail(ctx, client); err != nil {
-				return u, err
-			}
+		var err error
+		if u.Email, err = c.userEmail(ctx, client); err != nil {
+			return u, err
 		}
 	}
 	return u, nil

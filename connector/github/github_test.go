@@ -530,7 +530,7 @@ func expectEquals(t *testing.T, a interface{}, b interface{}) {
 
 func TestNoreplyUserEmail(t *testing.T) {
 	ctx := context.Background()
-	s := newTestServer(map[string]testResponse{
+	privateS := newTestServer(map[string]testResponse{
 		"/user": {data: user{Login: "some-login", ID: 12345678, Name: "Joe Bloggs"}},
 		"/user/emails": {data: []userEmail{{
 			Email:    "some@email.com",
@@ -538,27 +538,53 @@ func TestNoreplyUserEmail(t *testing.T) {
 			Primary:  true,
 		}}},
 	})
-	defer s.Close()
+	defer privateS.Close()
+
+	publicS := newTestServer(map[string]testResponse{
+		"/user": {data: user{Login: "some-login", ID: 12345678, Name: "Joe Bloggs", Email: "some@email.com"}},
+	})
+	defer publicS.Close()
+
 	client := newClient()
 
 	for _, tc := range []struct {
+		s    *httptest.Server
 		host string
 		want string
 	}{
 		{
 			want: "12345678+some-login@users.noreply.github.com",
+			s:    privateS,
 		},
 		{
 			host: "github.com",
 			want: "12345678+some-login@users.noreply.github.com",
+			s:    privateS,
 		},
 		{
 			host: "example.com",
 			want: "some@email.com",
+			s:    privateS,
+		},
+
+		// github.com であればメールアドレスの公開状態によらず noreply のメールアドレスを利用する
+		{
+			want: "12345678+some-login@users.noreply.github.com",
+			s:    publicS,
+		},
+		{
+			host: "github.com",
+			want: "12345678+some-login@users.noreply.github.com",
+			s:    publicS,
+		},
+		{
+			host: "example.com",
+			want: "some@email.com",
+			s:    publicS,
 		},
 	} {
 		t.Run(tc.host, func(t *testing.T) {
-			c := githubConnector{apiURL: s.URL, hostName: tc.host, httpClient: client, noreplyPrivateEmail: true}
+			c := githubConnector{apiURL: tc.s.URL, hostName: tc.host, httpClient: client, noreplyPrivateEmail: true}
 			u, err := c.user(ctx, client)
 			if err != nil {
 				t.Fatal(err)
