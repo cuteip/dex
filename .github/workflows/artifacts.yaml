@@ -28,10 +28,6 @@ on:
       container-image-ref:
         description: Container image ref
         value: ${{ jobs.container-images.outputs.ref }}
-  push:
-    branches:
-      - master
-  pull_request:
 
 jobs:
   container-images:
