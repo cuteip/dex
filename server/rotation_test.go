@@ -1,12 +1,13 @@
 package server
 
 import (
-	"os"
+	"context"
+	"io"
+	"log/slog"
 	"sort"
 	"testing"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dexidp/dex/storage"
@@ -14,7 +15,7 @@ import (
 )
 
 func signingKeyID(t *testing.T, s storage.Storage) string {
-	keys, err := s.GetKeys()
+	keys, err := s.GetKeys(context.TODO())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -22,7 +23,7 @@ func signingKeyID(t *testing.T, s storage.Storage) string {
 }
 
 func verificationKeyIDs(t *testing.T, s storage.Storage) (ids []string) {
-	keys, err := s.GetKeys()
+	keys, err := s.GetKeys(context.TODO())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,11 +69,7 @@ func TestKeyRotator(t *testing.T) {
 	// Only the last 5 verification keys are expected to be kept around.
 	maxVerificationKeys := 5
 
-	l := &logrus.Logger{
-		Out:       os.Stderr,
-		Formatter: &logrus.TextFormatter{DisableColors: true},
-		Level:     logrus.DebugLevel,
-	}
+	l := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{}))
 
 	r := &keyRotator{
 		Storage:  memory.New(l),
@@ -104,11 +101,7 @@ func TestKeyRotator(t *testing.T) {
 
 func TestRefreshTokenPolicy(t *testing.T) {
 	lastTime := time.Now()
-	l := &logrus.Logger{
-		Out:       os.Stderr,
-		Formatter: &logrus.TextFormatter{DisableColors: true},
-		Level:     logrus.DebugLevel,
-	}
+	l := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{}))
 
 	r, err := NewRefreshTokenPolicy(l, true, "1m", "1m", "1m")
 	require.NoError(t, err)
